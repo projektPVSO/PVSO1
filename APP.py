@@ -16,6 +16,8 @@ import numpy as np
 import argparse
 import imutils
 import time
+import colorsys
+from numpy.linalg import norm
 
 buffer = 32
 
@@ -30,10 +32,13 @@ direction = ""
 
 time.sleep(2.0)
 
+
+
+
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         Dialog.setObjectName("Dialog")
-        Dialog.resize(815, 538)
+        #Dialog.resize(815, 538)
         self.imgLabel_1 = QtWidgets.QLabel(Dialog)
         self.imgLabel_1.setGeometry(QtCore.QRect(150, 80, 471, 441))
         self.imgLabel_1.setAutoFillBackground(False)
@@ -51,20 +56,8 @@ class Ui_Dialog(object):
         self.TEXT = QtWidgets.QTextBrowser(Dialog)
         self.TEXT.setGeometry(QtCore.QRect(10, 10, 256, 61))
         self.TEXT.setObjectName("TEXT")
-        self.imgLabel_2 = QtWidgets.QLabel(Dialog)
-        self.imgLabel_2.setGeometry(QtCore.QRect(630, 80, 151, 131))
-        self.imgLabel_2.setFrameShape(QtWidgets.QFrame.Box)
-        self.imgLabel_2.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.imgLabel_2.setLineWidth(2)
-        self.imgLabel_2.setScaledContents(True)
-        self.imgLabel_2.setObjectName("imgLabel_2")
-        self.imgLabel_3 = QtWidgets.QLabel(Dialog)
-        self.imgLabel_3.setGeometry(QtCore.QRect(630, 240, 151, 131))
-        self.imgLabel_3.setFrameShape(QtWidgets.QFrame.Box)
-        self.imgLabel_3.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.imgLabel_3.setLineWidth(2)
-        self.imgLabel_3.setScaledContents(True)
-        self.imgLabel_3.setObjectName("imgLabel_3")
+
+
         self.imgLabel_4 = QtWidgets.QLabel(Dialog)
         self.imgLabel_4.setGeometry(QtCore.QRect(630, 400, 151, 121))
         self.imgLabel_4.setFrameShape(QtWidgets.QFrame.Box)
@@ -106,8 +99,8 @@ class Ui_Dialog(object):
         self.imgLabel_1.setText(_translate("Dialog", "TextLabel"))
         self.SHOW.setText(_translate("Dialog", "Show"))
         self.CAPTURE.setText(_translate("Dialog", "Capture Screen Shot"))
-        self.imgLabel_2.setText(_translate("Dialog", "TextLabel"))
-        self.imgLabel_3.setText(_translate("Dialog", "TextLabel"))
+        #self.imgLabel_2.setText(_translate("Dialog", "TextLabel"))
+        #self.imgLabel_3.setText(_translate("Dialog", "TextLabel"))
         self.imgLabel_4.setText(_translate("Dialog", "TextLabel"))
         self.label.setText(_translate("Dialog", "Center Coordinate"))
 
@@ -130,120 +123,109 @@ class MainWindow(QWidget):
         self.logic = 0
         self.value = 1
         self.ui.CAPTURE.clicked.connect(self.CaptureClicked)
+        clicked = False
+        #--------
+        self.clicked = False
+        self.first= False
+        self.auto=False
+        self.r = 0
+        self.g = 0
+        self.b = 0
+        self.x_pos = 0
+        self.y_pos = 0
+        self.kernel = np.ones((5,5), np.uint8) 
+
+        self.lower_blue = np.array([30, 30, 30])
+        self.upper_blue = np.array([40, 40, 40])
+        self.brightness
+
+
+        global xs, ys
     
     def CaptureClicked(self):
         self.logic =2
+    
+    def mouseDoubleClickEvent(self, event):
+        ret, image = self.cap.read()
+        
+        # convert image to RGB format
+        imageFrame = imutils.resize(image, width=600)
+
+        frameG = cv2.GaussianBlur(imageFrame, (7,7), 0)#cv2.medianBlur(frame, 21)#
+        frameG = cv2.erode(frameG, self.kernel, iterations = 2)
+        frameG = cv2.dilate(frameG, self.kernel, iterations = 1)
+        global b,g,r
+        y=event.x()-70
+        x=event.y()-85
+        b, g, r = frameG[x, y]
+        # vector of chosen colors
+        self.b=int(b)
+        self.g=int(g)
+        self.r=int(r) 
+        
+    def brightness(self,img):
+        if len(img.shape) == 3:
+            # Colored RGB or BGR (*Do Not* use HSV images with this function)
+            # create brightness with euclidean norm
+            return np.average(norm(img, axis=2)) / np.sqrt(3)
+        else:
+            # Grayscale
+            return np.average(img)     
+        
         
     def viewCam(self):
         self.ui.TEXT.setText('Kindle Press "Capture Image" to capture image')
         
-        # self.cap = cv2.VideoCapture(0)
-        # start timer
-        #self.timer.start(20)
         # read image in BGR format
-        ret, image = self.cap.read()
+        ret, imageFrame = self.cap.read()
         
         # convert image to RGB format
-        image = imutils.resize(image, width=600)
-        blurred = cv2.GaussianBlur(image, (11, 11), 0)
-        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+        imageFrame = imutils.resize(imageFrame, width=600)
+        br=self.brightness(imageFrame)
+        print(br)
+        frameG = cv2.GaussianBlur(imageFrame, (7,7), 0)#cv2.medianBlur(frame, 21)#
+        frameG = cv2.erode(frameG, self.kernel, iterations = 2)
+        frameG = cv2.dilate(frameG, self.kernel, iterations = 1)
         
-        mask = cv2.inRange(hsv, greenLower, greenUpper)
-        mask = cv2.erode(mask, None, iterations=2)
-        mask = cv2.dilate(mask, None, iterations=2)
-        
-        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-        cnts = imutils.grab_contours(cnts)
-        center = None
-        
-        
-        # only proceed if at least one contour was found
-        if len(cnts) > 0:
-            c = max(cnts, key=cv2.contourArea) 
-            ((x, y), radius) = cv2.minEnclosingCircle(c)
-            M = cv2.moments(c)
-            center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+        #if clicked:
 
-            # only proceed if the radius meets a minimum size
-            if radius > 10:
-                # draw the circle and centroid on the frame,
-                # then update the list of tracked points
-                cv2.circle(image, (int(x), int(y)), int(radius),
-                    (0, 255, 255), 2)
-                cv2.circle(image, center, 5, (0, 0, 255), -1)
-               
-                # Hoang adding code to show center cooordinate
-                x_coordinate = center[0]
-                y_coordinate = center[1]
-                text = f'x: {x_coordinate},  y: {y_coordinate}'
-                if x is not None and y is not None:
-                    self.ui.TEXT_2.setText(text)
-                # Hoang adding code to show center cooordinate
+        hsv = cv2.cvtColor(frameG, cv2.COLOR_BGR2HSV)
+        h,s,v=colorsys.rgb_to_hsv(self.r/255, self.g/255, self.b/255)
+        h=h*360
+
+        self.lower_blue = np.array([(h-11)/360*179, (s-0.3)*255, (v-0.2)*255])
+        self.upper_blue = np.array([(h+11)/360*179, (s+0.3)*255, (v+0.2)*255])
+        mask = cv2.inRange(hsv, self.lower_blue, self.upper_blue) 
+
+
+        clicked = False
+
+        hsv = cv2.cvtColor(frameG, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, self.lower_blue, self.upper_blue) 
+
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for cnt in contours:
+            if cv2.contourArea(cnt) > 1000:
+                x, y, width, height = cv2.boundingRect(cnt)
+
+                imageFrame=cv2.rectangle(imageFrame, (x , y), (x + width, y + height),(0, 0, 255), 2)
+
+                xs=int(x+width/2)
+                ys=int(y+height/2)
+
+                cv2.rectangle(imageFrame,(xs,ys),(xs+2,ys+2),(255,0,255),3)
+
         
-        
-        
-            # loop over the set of tracked points
-        for i in np.arange(1, len(pts)):
-            # if either of the tracked points are None, ignore
-            # them
-            if pts[i - 1] is None or pts[i] is None:
-                continue
-
-            # check to see if enough points have been accumulated in
-            # the buffer
-            if counter >= 10 and i == 1 and pts[-10] is not None:
-                # compute the difference between the x and y
-                # coordinates and re-initialize the direction
-                # text variables
-                dX = pts[-10][0] - pts[i][0]
-                dY = pts[-10][1] - pts[i][1]
-                (dirX, dirY) = ("", "")
-
-                # ensure there is significant movement in the
-                # x-direction
-                if np.abs(dX) > 20:
-                    dirX = "East" if np.sign(dX) == 1 else "West"
-
-                # ensure there is significant movement in the
-                # y-direction
-                if np.abs(dY) > 20:
-                    dirY = "North" if np.sign(dY) == 1 else "South"
-
-                # handle when both directions are non-empty
-                if dirX != "" and dirY != "":
-                    direction = "{}-{}".format(dirY, dirX)
-
-                # otherwise, only one direction is non-empty
-                else:
-                    direction = dirX if dirX != "" else dirY
-
-            # otherwise, compute the thickness of the line and
-            # draw the connecting lines
-            thickness = int(np.sqrt(buffer/ float(i + 1)) * 2.5)
-            cv2.line(image, pts[i - 1], pts[i], (0, 0, 255), thickness)
-        
-        # convert image to RGB format 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # get image infos
-        height, width, channel = image.shape
+        # get image RGB
+        height, width, channel = imageFrame.shape
         step = channel * width
         # create QImage from image
-        qImg = QImage(image.data, width, height, step, QImage.Format_RGB888)
+        qImg = QImage(imageFrame.data, width, height, step, QImage.Format_RGB888)
         # show image in img_label
         self.ui.imgLabel_1.setPixmap(QPixmap.fromImage(qImg))
         
-        # get image blurred
-        height_2, width_2, channel_2 = blurred.shape
-        step_2 = channel_2 * width_2
-        qImg_2 =  QImage(blurred.data, width_2, height_2, step_2, QImage.Format_RGB888)
-        self.ui.imgLabel_2.setPixmap(QPixmap.fromImage(qImg_2))
-        
-        # get image hsv
-        height_3, width_3, channel_3 = hsv.shape
-        step_3 = channel_3 * width_3
-        qImg_3 =  QImage(hsv.data, width_3, height_3, step_3, QImage.Format_RGB888)
-        self.ui.imgLabel_3.setPixmap(QPixmap.fromImage(qImg_3))
-        
+
         # get image mask
         height_4, width_4= mask.shape
         step_4 = 3 * width_4                                                      # dont need step -> int bytesPerLine
@@ -275,12 +257,15 @@ class MainWindow(QWidget):
             # update control_bt text
             self.ui.TEXT_6.setText("Stop")
         
+        
+
+                
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # create and show mainWindow
     mainWindow = MainWindow()
     mainWindow.show()
-
+    
     sys.exit(app.exec_())
     
